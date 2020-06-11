@@ -15,8 +15,9 @@ setup(
     download_url=f"https://github.com/normoes/pypi_versions/archive/{__version__}.tar.gz",
     install_requires=["requests>=2.23.0"],
     # py_modules=["pypi_versions"],
-    packages=find_packages(exclude=["tests*"]),
-    scripts=["pypi_versions/bin/pypi_versions"],
+    packages=find_packages("pypi_versions", exclude=["tests*"]),
+    # packages=["pypi_versions"],
+    scripts=["bin/pypi_versions"],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
