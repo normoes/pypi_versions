@@ -111,7 +111,7 @@ def read_remote_requirements(requirements):
 
 
 def main():
-    from _version import __version__
+    from ._version import __version__
     import argparse
 
     parser = argparse.ArgumentParser(
