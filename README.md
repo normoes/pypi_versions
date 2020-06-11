@@ -12,6 +12,7 @@ The recommended way is to compile a `requirements.txt` from a `requirements.in` 
 
 Run it like this:
 ```
+pypi_versions --version
 pypi_versions --requirements 1.txt 2.txt 3.txt
 ```
 
@@ -81,3 +82,10 @@ INFO:PypiVersions:'gevent': Version '1.5.0'.
 ```
 
 `--debug` shows some debug information.
+
+
+## Import
+
+```
+from pypi_versions import pypi_versions
+```

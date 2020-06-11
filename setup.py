@@ -1,6 +1,6 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
-from _version import __version__
+from pypi_versions._version import __version__
 
 
 setup(
@@ -21,6 +21,7 @@ setup(
         "Programming Language :: Python",
     ],
     install_requires=["requests>=2.23.0"],
-    py_modules=["pypi_versions"],
+    # py_modules=["pypi_versions"],
+    packages=find_packages(exclude=["tests*"]),
     scripts=["bin/pypi_versions"],
 )
