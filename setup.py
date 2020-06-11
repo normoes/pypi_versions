@@ -1,10 +1,12 @@
-from setuptools import setup, find_packages
+from setuptools import setup
+
+# from setuptools import setup, find_packages
 
 from pypi_versions._version import __version__
 
 
 setup(
-    name="pypi_versions",
+    name="pypi-versions",
     version=__version__,
     description=("Compare local depdenencies against Pypi."),
     long_description=open("README.md").read(),
@@ -15,8 +17,8 @@ setup(
     download_url=f"https://github.com/normoes/pypi_versions/archive/{__version__}.tar.gz",
     install_requires=["requests>=2.23.0"],
     # py_modules=["pypi_versions"],
-    packages=find_packages("pypi_versions", exclude=["tests*"]),
-    # packages=["pypi_versions"],
+    # packages=find_packages("pypi_versions", exclude=["tests*"]),
+    packages=["pypi_versions"],
     scripts=["bin/pypi_versions"],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
