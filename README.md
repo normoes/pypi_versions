@@ -6,12 +6,22 @@ Reads dependencies from local projects' requirements files and compares against 
 
 The recommended way is to compile a `requirements.txt` from a `requirements.in` using `pip-compile` (`pip-tools`). later on `requirements.txt` will be install using `pip-sync`.
 
+Up to now the tool:
+* Does not consider git repositories.
+* Does not consider recursively defined requrement files, like `-r base.txt`.
+* Considers `==` versions only.
+
 ## Usage
 
-Run it like this:
+Run it like this - pass requirements files:
 ```
 pypi_versions --version
 pypi_versions --requirements 1.txt 2.txt 3.txt
+```
+
+Run it like this - pass requirements:
+```
+pypi_versions --requirement requests==2.24.0 python-monerorpc==0.5.13
 ```
 
 Possible output:

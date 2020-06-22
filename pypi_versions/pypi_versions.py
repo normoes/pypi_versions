@@ -1,7 +1,12 @@
+"""
+python -m pypi_versions.pypi_versions --requirements ./requirements.txt
+"""
+
 import os
 import sys
 import logging
 import re
+from typing import Dict
 
 import requests
 from requests.exceptions import RequestException
@@ -18,12 +23,44 @@ logger.setLevel(logging.INFO)
 PYPI_PACKAGES_URL = "https://pypi.python.org/pypi/{project}/json"
 
 
-def read_local_requirements(local_requirements):
+def get_project_version(requirement: str, projects: Dict[str, str]):
     """
 
-    Does not consider dependencies from git URLs.
+    * Does not consider dependencies from git URLs.
+    * Does not consider recursively defined requrements files, like: '-r base.txt'.
+    * If duplicates are found, the more recent version is considered.
+    """
 
-    If duplicates are found, the more recent version is considered.
+    requirement_ = requirement.strip("\n")
+    if (
+        requirement_
+        and not requirement_.startswith("#")
+        and not requirement_.startswith("git+")
+        and not requirement_.startswith("-")
+    ):
+        # Remove comments at the end of the line.
+        match = re.match(r"^([^#]*)#(.*)$", requirement_)
+        if match:  # The line contains a hash / comment
+            requirement_ = match.group(1).rstrip()
+        logger.debug(f"'{repr(requirement_)}'")
+        project, version = requirement_.split("==")
+        if project in projects:
+            versions = [
+                version,
+                projects[project]["local_version"],
+            ]
+            versions.sort(key=lambda x: [int(u) for u in x.split(".")])
+            version = versions[-1]
+        logger.debug(project)
+        logger.debug(version)
+        projects[project] = {"local_version": version}
+
+
+def read_local_requirements(local_requirements):
+    """Read requirements from requirements text files.
+
+    Example:
+    requirements.txt
     """
 
     requirements = {}
@@ -33,28 +70,26 @@ def read_local_requirements(local_requirements):
             with open(local_requirement, "r") as req:
                 logger.info(f"Checking {local_requirement}.")
                 for line in req.readlines():
-                    line = line.strip("\n")
-                    if (
-                        line
-                        and not line.startswith("#")
-                        and not line.startswith("git+")
-                    ):
-                        # Remove comments at the end of the line.
-                        match = re.match(r"^([^#]*)#(.*)$", line)
-                        if match:  # The line contains a hash / comment
-                            line = match.group(1).rstrip()
-                        logger.debug(f"'{repr(line)}'")
-                        project, version = line.split("==")
-                        if project in requirements:
-                            versions = [
-                                version,
-                                requirements[project]["local_version"],
-                            ]
-                            versions.sort(
-                                key=lambda x: [int(u) for u in x.split(".")]
-                            )
-                            version = versions[-1]
-                        requirements[project] = {"local_version": version}
+                    get_project_version(
+                        requirement=line, projects=requirements
+                    )
+
+    return requirements
+
+
+def read_local_requirement(local_requirement):
+    """Read reqiurements from requirements strings.
+
+    Example:
+    requests==2.24.0
+    """
+
+    requirements = {}
+
+    logger.info(f"Checking {local_requirement}.")
+    for requirement in local_requirement:
+        logger.info(f"Checking {requirement}.")
+        get_project_version(requirement=requirement, projects=requirements)
 
     return requirements
 
@@ -62,18 +97,27 @@ def read_local_requirements(local_requirements):
 def read_remote_requirements(requirements):
     requirements_ = dict(requirements)
 
+    # Get base requirement for depednencies like 'qrcode[pil]'.
+    # [pil] defines a 'extras_require'.
+    p = re.compile("(.*)\[.*\]")  # noqa: W605
+
     for project in requirements:
         logger.info(f"Get remote version for '{project}'.")
         response = None
         try:
-            complete_url = PYPI_PACKAGES_URL.format(project=project)
+            match = p.match(project)
+            if match:
+                project_ = match.group(1).rstrip()
+            else:
+                project_ = project
+            logger.debug(f"Project: '{project_}'.")
+            complete_url = PYPI_PACKAGES_URL.format(project=project_)
             response = requests.get(complete_url)
         except (RequestException) as e:
             logger.error(f"{str(e)}")
 
         if response is not None:
             response_json = response.json()
-            # if project.lower() == "django":
             version = response_json["info"]["version"]
             major_version = version[: version.find(".")]
             local_version = requirements[project]["local_version"]
@@ -115,7 +159,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Compare local depdenencies against Pypi.",
+        description="Compare local depdenencies against PyPI.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         allow_abbrev=False,
     )
@@ -125,11 +169,17 @@ def main():
         version="%(prog)s {version}".format(version=__version__),
     )
 
-    parser.add_argument(
+    requirements = parser.add_mutually_exclusive_group(required=True)
+    requirements.add_argument(
         "--requirements",
-        required=True,
         nargs="+",
-        help="Requirements files to consider.",
+        help="Requirements files to consider, like 'requirements.txt'.",
+    )
+
+    requirements.add_argument(
+        "--requirement",
+        nargs="+",
+        help="Requirements to consider, like 'requests==2.24.0'.",
     )
 
     parser.add_argument(
@@ -149,11 +199,17 @@ def main():
         logger.setLevel(logging.INFO)
 
     local_requirements = args.requirements
+    local_requirement = args.requirement
     return_json = args.json
 
-    requirements = read_local_requirements(
-        local_requirements=local_requirements
-    )
+    if local_requirements:
+        requirements = read_local_requirements(
+            local_requirements=local_requirements
+        )
+    elif local_requirement:
+        requirements = read_local_requirement(
+            local_requirement=local_requirement
+        )
     complete_requirements = read_remote_requirements(requirements=requirements)
     logger.debug(complete_requirements)
 
