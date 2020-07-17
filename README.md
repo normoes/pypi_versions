@@ -7,9 +7,11 @@ Reads dependencies from local projects' requirements files and compares against 
 The recommended way is to compile a `requirements.txt` from a `requirements.in` using `pip-compile` (`pip-tools`). later on `requirements.txt` will be install using `pip-sync`.
 
 Up to now the tool:
-* Does not consider git repositories.
+* Does not consider git repositories defined with `git+`.
 * Does not consider recursively defined requrement files, like `-r base.txt`.
-* Considers `==` versions only.
+* Does not consider constraint file defined with `-c constraint.txt`.
+* Considers `==`, `>=` and latest version.
+* If duplicate requirements are found, the more recent version is considered.
 
 ## Usage
 
@@ -96,4 +98,29 @@ INFO:PypiVersions:'gevent': Version '1.5.0'.
 
 ```
 from pypi_versions import pypi_versions
+```
+
+## Example
+
+Let's assume the latest version of `requests` on PyPI is `requests==2.24.0`.
+
+Pinning to `requests==2.23.0` shows a difference:
+
+```
+python -m pypi_versions.pypi_versions --requirement requests==2.23.0
+INFO:PypiVersions:Checking ['requests==2.23.0'].
+INFO:PypiVersions:Checking requests==2.23.0.
+INFO:PypiVersions:Get remote version for 'requests'.
+INFO:PypiVersions:'requests': Version '2.24.0'.
+
+'requests': Local version '2.23.0' and remote version '2.24.0' differ.
+```
+
+Pinning to `requests>=2.23.0` shows no difference:
+```
+python -m pypi_versions.pypi_versions --requirement requests>=2.23.0
+INFO:PypiVersions:Checking ['requests'].
+INFO:PypiVersions:Checking requests.
+INFO:PypiVersions:Get remote version for 'requests'.
+INFO:PypiVersions:'requests': Version '2.24.0'.
 ```

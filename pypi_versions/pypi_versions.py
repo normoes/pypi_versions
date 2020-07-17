@@ -26,8 +26,9 @@ PYPI_PACKAGES_URL = "https://pypi.python.org/pypi/{project}/json"
 def get_project_version(requirement: str, projects: Dict[str, str]):
     """
 
-    * Does not consider dependencies from git URLs.
-    * Does not consider recursively defined requrements files, like: '-r base.txt'.
+    * Does not consider git repositories defined with `git+`.
+    * Does not consider recursively defined requrement files, like `-r base.txt`.
+    * Does not consider constraint file defined with `-c constraint.txt`.
     * If duplicates are found, the more recent version is considered.
     """
 
@@ -42,18 +43,44 @@ def get_project_version(requirement: str, projects: Dict[str, str]):
         match = re.match(r"^([^#]*)#(.*)$", requirement_)
         if match:  # The line contains a hash / comment
             requirement_ = match.group(1).rstrip()
-        logger.debug(f"'{repr(requirement_)}'")
-        project, version = requirement_.split("==")
+        logger.debug(f"{repr(requirement_)}")
+        # https://pip.pypa.io/en/stable/user_guide/#installing-packages
+        try:
+            project, version = re.split("[=>]=", requirement_)
+            logger.debug(f"{project} - {version}")
+            match = re.search(".*([=>]=).*", requirement_)
+            if not match:
+                version_detail = "undefined"
+                version_operator = ""
+            else:
+                # Requirements like: 'requests==2.24.0' or 'requests>=2.23.0'
+                version_operator = match.groups()[0]
+                logger.debug(version_operator)
+                if match.groups()[0] == ">=":
+                    version_detail = "minimum_version"
+                else:
+                    version_detail = "specific_version"
+        except ValueError:
+            # Requirements like: 'requests'
+            project = requirement_
+            version = ""
+            version_detail = "latest_version"
+            version_operator = ""
+
         if project in projects:
             versions = [
                 version,
                 projects[project]["local_version"],
             ]
-            versions.sort(key=lambda x: [int(u) for u in x.split(".")])
+            versions.sort(key=lambda x: int(re.sub("\D", "", x)))  # noqa: W605
             version = versions[-1]
         logger.debug(project)
         logger.debug(version)
-        projects[project] = {"local_version": version}
+        projects[project] = {
+            "local_version": version,
+            "version_detail": version_detail,
+            "version_operator": version_operator,
+        }
 
 
 def read_local_requirements(local_requirements):
@@ -121,6 +148,11 @@ def read_remote_requirements(requirements):
             version = response_json["info"]["version"]
             major_version = version[: version.find(".")]
             local_version = requirements[project]["local_version"]
+            version_detail = requirements[project]["version_detail"]
+            if not local_version and version_detail == "latest_version":
+                logger.debug(f"Using latest version for '{project}'.")
+                local_version = version
+                requirements[project]["local_version"] = version
             local_major_version = local_version[: local_version.find(".")]
             if local_major_version != major_version:
                 logger.info(
@@ -138,7 +170,7 @@ def read_remote_requirements(requirements):
                     and key.replace(".", "0").isdigit()
                 ]
                 released_versions.sort(
-                    key=lambda x: [int(u) for u in x.split(".")]
+                    key=lambda x: int(re.sub("\D", "", x))  # noqa: W605
                 )
                 logger.debug(released_versions)
                 version = released_versions[-1]
@@ -195,6 +227,11 @@ def main():
 
     if args.debug:
         logger.setLevel(logging.DEBUG)
+        stream_handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(f"%(lineno)s: {logging.BASIC_FORMAT}")
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
+        logger.propagate = False
     else:
         logger.setLevel(logging.INFO)
 
@@ -224,7 +261,10 @@ def main():
                 result_json[project] = v
             else:
                 print(f"'{project}': No remote version found.")
-        if v["local_version"] != v["remote_version"]:
+        if (
+            v["local_version"] != v["remote_version"]
+            and v["version_operator"] == "=="
+        ):
             if return_json:
                 result_json[project] = v
             else:
